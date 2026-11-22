@@ -1,0 +1,9 @@
+endpoint_name              = "petshop-comfyui"
+worker_image               = "CHANGE_ME_TO_A_PUBLISHED_WORKER_IMAGE"
+gpu_pool_ids               = ["ADA_24"]
+gpu_count                  = 1
+workers_min                = 0
+workers_max                = 1
+idle_timeout_seconds       = 5
+execution_timeout_seconds  = 900
+container_disk_gb          = 50

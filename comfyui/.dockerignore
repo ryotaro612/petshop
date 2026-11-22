@@ -1,0 +1,7 @@
+input/
+output/
+models/
+user/
+custom_nodes/
+__pycache__/
+*.pyc
