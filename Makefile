@@ -26,13 +26,17 @@ comfyui/ComfyUI: | comfyui/.venv
 
 ##@ Run
 
-launch: comfyui/.venv comfyui/ComfyUI ## start ComfyUI with comfy-cli
-	$(COMFY) launch
+# comfyui/ComfyUI holds only ComfyUI's code. Settings (user/), models, custom nodes,
+# inputs and outputs live in comfyui/ itself, so `make clean` keeps them.
+# ComfyUI fails to start if custom_nodes/ is missing from the base directory.
+launch: comfyui/.venv comfyui/ComfyUI ## start ComfyUI with comfy-cli, keeping settings and data in comfyui/
+	mkdir -p comfyui/custom_nodes
+	$(COMFY) launch -- --base-directory $(CURDIR)/comfyui
 
 ##@ Clean
 
-clean: ## remove everything setup created (virtualenvs, comfyui/ComfyUI including its models and outputs, .cache)
-	rm -rf comfyui/.venv scripts/.venv comfyui/ComfyUI .cache
+clean: ## remove everything that can be downloaded again (keeps comfyui/user, input and output)
+	rm -rf comfyui/.venv 
 
 .PHONY: setup launch clean
 
