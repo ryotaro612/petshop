@@ -50,17 +50,17 @@ Create a local-first tool for turning an existing 2D anime-style character illus
 
 ## Setup automation (Makefile)
 
-- `make setup` builds everything from a fresh clone; verified end to end on a simulated clean clone in about 43 seconds, with `make run`/`make stop` and an idempotent re-run passing.
+- The Makefile only goes as far as starting ComfyUI with comfy-cli (user's decision, 2026-11-23): targets are `setup`, `launch` and `help`. `make setup` = `uv sync` for comfyui/ and scripts/, then, if `comfyui/ComfyUI` is missing, `comfy-cli install --m-series --skip-requirement --skip-torch-or-directml --skip-manager`. Verified on a clean clone: launch served HTTP 200 on mps, and `uv sync --dry-run` showed comfy-cli added nothing to the venv.
+- comfy-cli is run with `VIRTUAL_ENV=comfyui/.venv` because it picks Python from `VIRTUAL_ENV` first; without it, install creates an empty `comfyui/ComfyUI/.venv` and launch fails with `No module named 'yaml'`. `--m-series` is required even with `--skip-torch-or-directml`. `--skip-prompt` keeps it non-interactive.
 - The user asked for a simple Makefile (2026-11-23): it assumes git, uv and Python 3.14 are installed and that it is run from the repo root (relative paths). No prerequisite checks, no Python installation, no `check` target.
 - The Makefile sets `UV_CACHE_DIR=.cache/uv` (package cache stays in the repo) and `UV_PYTHON_PREFERENCE=only-system` (use the installed Python, never download one), and unexports the stale `VIRTUAL_ENV`. The virtualenvs point at `/opt/homebrew/opt/python@3.14`; an installed Python counts as a prerequisite like git and uv, not as a project file.
-- ComfyUI is cloned at a pinned commit (`COMFYUI_REF` in the Makefile, currently `4c2b826`) so the clone matches `comfyui/uv.lock`. Upgrading means bumping the ref, re-running `uv add -r ComfyUI/requirements.txt` in `comfyui/`, and committing both.
-- `make run` starts `ComfyUI/main.py` directly rather than via comfy-cli, so a normal run writes no comfy-cli config outside the repo. comfy-cli remains installed for node management.
-- ComfyUI's data lives in its default tree, `comfyui/ComfyUI/{input,output,user}`, with no `--base-directory`. `ComfyUI/user/default/workflows` is a symlink to the tracked `comfyui/workflows/`. The empty outer `comfyui/{input,output,user}` directories created by an unexplained 01:32 run on 2026-11-23 are not used.
+- ComfyUI is not pinned: comfy-cli clones the latest master. If a newer ComfyUI adds requirements, re-run `uv add -r ComfyUI/requirements.txt` in `comfyui/` and commit `pyproject.toml` and `uv.lock`.
+- ComfyUI's data lives in its default tree, `comfyui/ComfyUI/{input,output,user}`, with no `--base-directory`. Saved workflows stay in `ComfyUI/user/default/workflows/`; copy them into the tracked `comfyui/workflows/` to keep them. The empty outer `comfyui/{input,output,user}` directories created by an unexplained 01:32 run on 2026-11-23 are not used.
 
 ## Python version
 
 - The project uses Python 3.14 (`comfyui/.python-version` and `scripts/.python-version`), using the system-installed interpreter. The user asked for the latest Python on 2026-11-23.
-- 3.15 (3.15.2) was tried and fails: `kornia-rs`, pulled in by ComfyUI's core `kornia` requirement, publishes no cp315 wheel and no sdist (latest 0.2.0 tops out at cp314). Retry 3.15 when a kornia-rs release ships cp315 wheels: install Python 3.15, bump both `.python-version` files, then run `make clean setup` and `make run`.
+- 3.15 (3.15.2) was tried and fails: `kornia-rs`, pulled in by ComfyUI's core `kornia` requirement, publishes no cp315 wheel and no sdist (latest 0.2.0 tops out at cp314). Retry 3.15 when a kornia-rs release ships cp315 wheels: install Python 3.15, bump both `.python-version` files, then recreate `comfyui/.venv` and `scripts/.venv` with `make setup` and start with `make launch`.
 - pnpm cannot install Python. pnpm 10.34.5 supports only the `node`, `deno` and `bun` runtimes; uv is the tool for Python here.
 - When checking wheel availability with `uv pip compile --python-platform aarch64-apple-darwin`, set `MACOSX_DEPLOYMENT_TARGET` to the real macOS version, or newer-macOS wheels such as PyAV's `macosx_14_0` ones are wrongly rejected. A compile check also does not prove `uv sync --locked` will succeed, so verify with a real install.
 
