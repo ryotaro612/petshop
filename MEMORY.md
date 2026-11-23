@@ -20,7 +20,7 @@ Create a local-first tool for turning an existing 2D anime-style character illus
 ## Architecture decisions
 
 - Use ComfyUI locally on the Mac first as the UI for image input, mask drawing, prompt/workflow experimentation, and preview. ComfyUI is an orchestration/UI tool, not itself a model.
-- Run local ComfyUI in Docker; use CPU mode for UI/workflow authoring and keep model inference on RunPod. Do not rely on local GPU availability.
+- Run local ComfyUI natively in `comfyui/.venv` (not Docker; the Docker setup was dropped on 2026-11-22 and survives in commit `aed7b64` if it is ever wanted back). Use CPU mode for UI/workflow authoring and keep model inference on RunPod. Do not rely on local GPU availability.
 - Keep heavyweight model inference on RunPod Serverless GPU workers. The local Mac is not assumed to have a suitable GPU.
 - Use Terraform to manage RunPod endpoint/template configuration so infrastructure changes are reviewable.
 - Prototype workflows in ComfyUI first. Add a dedicated thin local UI only after the useful interaction pattern is known (canvas/mask, prompts, before/after comparison, job status, video/loop/sprite preview). Avoid building a complete UI before validating model workflows.
@@ -38,6 +38,36 @@ Create a local-first tool for turning an existing 2D anime-style character illus
 6. Extract 56 frames, select/adjust a loopable interval, preview seam behavior, normalize each cell to 780x780 (preserving aspect ratio with padding/cropping as configured), and pack the atlas.
 7. Save prompt, seed, workflow/version, and chosen frame metadata alongside outputs to make iterations reproducible.
 
+## Local ComfyUI decisions
+
+- ComfyUI runs natively on the Mac (not Docker). The Docker setup was dropped on 2026-11-22 and survives in commit `aed7b64` if it is ever wanted back.
+- **Hard constraint from the user (2026-11-23): nothing this project needs may be installed outside `/Users/ryotaro/ryotaro612/petshop`.** comfy-cli's default workspace is `~/Documents/comfy/ComfyUI`; that install was moved into the repo and the directory deleted. The default workspace is now pinned with `comfy-cli set-default <repo>/comfyui/ComfyUI`.
+- ComfyUI lives at `comfyui/ComfyUI/` (upstream clone, gitignored) and its Python dependencies in `comfyui/.venv` (gitignored), managed as a uv project in `comfyui/`.
+- comfy-cli is the install/launch front end (`comfyui/.venv/bin/comfy-cli launch`), declared as a project dependency. Verified working: ComfyUI 0.46.0, Python 3.14.10, torch 2.15, `Device: mps` on the M3 Max.
+- **ComfyUI's requirements are declared in `comfyui/pyproject.toml` via `uv add -r ComfyUI/requirements.txt`, not installed ad hoc.** This is load-bearing: `uv sync`/`uv add`/`uv run` prune anything not declared, and that silently deleted torch and the rest of ComfyUI's dependencies once already. After updating the clone (`git -C comfyui/ComfyUI pull`), re-run `uv add -r ComfyUI/requirements.txt`.
+- Naming collisions have bitten this project three times: a uv project named `comfy` or `comfyui` declares a `src/<name>` package and a console script of the same name, which shadowed ComfyUI's own `comfy` package (`ModuleNotFoundError: No module named 'comfy.options'`) and clobbered comfy-cli's `comfy` binary. The current project name `comfyui` is safe because ComfyUI imports `comfy`; do not rename it to `comfy`.
+- Unavoidably outside the repo: comfy-cli's own config at `~/Library/Application Support/comfy-cli/config.ini`, and uv's managed interpreter/cache under `~/.local/share/uv`. These are tool state, like `~/.gitconfig`, not project files.
+
+## Setup automation (Makefile)
+
+- `make setup` builds everything from a fresh clone; verified end to end on a simulated clean clone in about 43 seconds, with `make run`/`make stop` and an idempotent re-run passing.
+- The user asked for a simple Makefile (2026-11-23): it assumes git, uv and Python 3.14 are installed and that it is run from the repo root (relative paths). No prerequisite checks, no Python installation, no `check` target.
+- The Makefile sets `UV_CACHE_DIR=.cache/uv` (package cache stays in the repo) and `UV_PYTHON_PREFERENCE=only-system` (use the installed Python, never download one), and unexports the stale `VIRTUAL_ENV`. The virtualenvs point at `/opt/homebrew/opt/python@3.14`; an installed Python counts as a prerequisite like git and uv, not as a project file.
+- ComfyUI is cloned at a pinned commit (`COMFYUI_REF` in the Makefile, currently `4c2b826`) so the clone matches `comfyui/uv.lock`. Upgrading means bumping the ref, re-running `uv add -r ComfyUI/requirements.txt` in `comfyui/`, and committing both.
+- `make run` starts `ComfyUI/main.py` directly rather than via comfy-cli, so a normal run writes no comfy-cli config outside the repo. comfy-cli remains installed for node management.
+- ComfyUI's data lives in its default tree, `comfyui/ComfyUI/{input,output,user}`, with no `--base-directory`. `ComfyUI/user/default/workflows` is a symlink to the tracked `comfyui/workflows/`. The empty outer `comfyui/{input,output,user}` directories created by an unexplained 01:32 run on 2026-11-23 are not used.
+
+## Python version
+
+- The project uses Python 3.14 (`comfyui/.python-version` and `scripts/.python-version`), using the system-installed interpreter. The user asked for the latest Python on 2026-11-23.
+- 3.15 (3.15.2) was tried and fails: `kornia-rs`, pulled in by ComfyUI's core `kornia` requirement, publishes no cp315 wheel and no sdist (latest 0.2.0 tops out at cp314). Retry 3.15 when a kornia-rs release ships cp315 wheels: install Python 3.15, bump both `.python-version` files, then run `make clean setup` and `make run`.
+- pnpm cannot install Python. pnpm 10.34.5 supports only the `node`, `deno` and `bun` runtimes; uv is the tool for Python here.
+- When checking wheel availability with `uv pip compile --python-platform aarch64-apple-darwin`, set `MACOSX_DEPLOYMENT_TARGET` to the real macOS version, or newer-macOS wheels such as PyAV's `macosx_14_0` ones are wrongly rejected. A compile check also does not prove `uv sync --locked` will succeed, so verify with a real install.
+
+## Known local environment hazard
+
+`~/.zshrc` activates `~/.venv` in every shell, and that venv was built on a Homebrew `python@3.13` that no longer exists, so its `pip` and other scripts fail with "bad interpreter". Because `~/.venv/bin` is prepended to `PATH` globally, it shadows commands even inside another activated venv. The user has chosen not to have this touched; work around it by invoking interpreters by explicit path or through `uv run`, and expect `uv` to print a `VIRTUAL_ENV does not match` warning.
+
 ## Local post-processing decisions
 
 - Local post-processing lives in `scripts/` as a `petshop` CLI (package `petshop_tools`), run with `uv run --project scripts petshop <command>`. `uv` manages the interpreter and dependencies so the Mac needs no global Python packages.
@@ -51,6 +81,6 @@ Create a local-first tool for turning an existing 2D anime-style character illus
 
 The repository was initially empty except for `.git`. A starter README, agent instructions, Terraform endpoint/template configuration, a Docker ComfyUI setup, and workflow notes were created. No RunPod resources have been deployed.
 
-Implemented and verified: the `scripts/` local post-processing CLI (inspect, composite, extract-frames, select-loop, preview-loop, normalize, pack-atlas), exercised end to end on synthetic fixtures.
+Implemented and verified: the `scripts/` local post-processing CLI (inspect, composite, extract-frames, select-loop, preview-loop, normalize, pack-atlas), exercised end to end on synthetic fixtures; and a native comfy-cli-managed ComfyUI install at `comfyui/ComfyUI`, confirmed serving on http://127.0.0.1:8188. The earlier hand-written `comfyui/setup.sh` and `start.sh` were deleted during restructuring and never committed; comfy-cli replaces them.
 
 Still unimplemented, because each depends on a model/worker choice the user has not made: the worker Docker image (Terraform `worker_image` is deliberately a placeholder), the RunPod request/response payload schema, image and mask upload transport, the ComfyUI custom node / client that calls RunPod, and the workflow JSON graphs under `comfyui/workflows/`. Do not present these placeholders as a working generation setup.

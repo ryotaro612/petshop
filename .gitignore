@@ -8,9 +8,15 @@ terraform/terraform.tfvars
 terraform/crash.log
 outputs/
 input/
+# ComfyUI: upstream clone and all local/generated state
+comfyui/ComfyUI/
+comfyui/.venv/
 comfyui/models/
 comfyui/user/
 comfyui/custom_nodes/
+comfyui/input/
+comfyui/output/
+comfyui/temp/
 *.mp4
 *.mov
 *.webm
@@ -22,3 +28,10 @@ __pycache__/
 *.pyc
 .venv/
 scripts/.venv/
+
+# editor lock / backup files
+.#*
+*~
+
+# uv interpreter + package cache (Makefile keeps them in-repo)
+.cache/

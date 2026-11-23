@@ -7,3 +7,7 @@ Place exported API/UI workflow JSON files in this directory. Initial intended fl
 3. Image-to-video: source/keyframe image(s) + motion prompt -> RunPod job -> video preview.
 
 These are workflow goals, not yet executable graphs. Add a workflow JSON only after matching it to a selected worker image, model, and request schema. Never store credentials in workflow JSON.
+
+## How ComfyUI sees this directory
+
+`make setup` (target `workflows`) makes `comfyui/ComfyUI/user/default/workflows` a symlink to this directory. Workflows saved from the ComfyUI UI therefore land here, in the repository, instead of inside the gitignored `comfyui/ComfyUI/` clone.

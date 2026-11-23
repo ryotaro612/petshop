@@ -16,7 +16,7 @@
 
 ```text
 Mac
-  ComfyUI (UI / mask paint / workflow authoring)
+  ComfyUI (venv直起動。UI / mask paint / workflow authoring)
     -> local RunPod client/custom node (API keyはサーバー側環境変数)
     -> RunPod Serverless endpoint (GPU inference)
   Local post-processing: mask composite, video frame extraction, loop preview,
@@ -50,10 +50,10 @@ UIはまずComfyUIを使って編集ワークフローを検証します。ワ�
 ### 前提
 
 - Terraform >= 1.6
-- uv (ローカル後処理スクリプト用。Python環境とffmpegはuvが解決します)
+- uv (ComfyUIとローカル後処理スクリプト用。Python環境とffmpegはuvが解決します)
 - RunPod API key
 - RunPod向けのServerless worker Docker image (ComfyUI worker等)
-- ComfyUI (Mac上。ローカルでGPU推論はしない)
+- ComfyUI (Mac上に `./comfyui/setup.sh` でインストール。ローカルでGPU推論はしない)
 
 ### Terraform
 
@@ -73,15 +73,31 @@ RunPod API keyをGitにcommitしないでください。`terraform.tfvars` とst
 
 ### ComfyUI
 
-ComfyUIはDocker上でUIとworkflow authoringに使います。Mac上にモデルを入れず、CPUモードで起動します。Docker Desktopが起動している状態で、リポジトリのルートから実行してください。
+ComfyUIはDockerを使わず、comfy-cliでリポジトリ内にインストールして起動します。**リポジトリ外にはファイルを置きません。**
 
 ```sh
-docker compose -f comfyui/compose.yaml up --build -d
+make setup   # Python・ComfyUI (固定コミット)・依存・後処理CLIをすべてリポジトリ内に用意
+make run     # http://127.0.0.1:8188 (Ctrl-C で停止。別端末からは make stop)
+make        # ターゲット一覧
 ```
 
-開くURLは <http://localhost:8188> です。停止・再開は `docker compose -f comfyui/compose.yaml down` / `docker compose -f comfyui/compose.yaml up -d`。`comfyui/input/` と `comfyui/output/` はホストと共有され、ワークフローは `comfyui/workflows/` からコンテナ内のComfyUIワークフロー一覧に表示されます。
+前提は `git`、`uv`、Python 3.14 (Homebrewの `python@3.14` など) がインストール済みであることです。uvのパッケージキャッシュは `.cache/uv` に置き、Pythonはダウンロードせず既存のものを使います。ComfyUIは `Makefile` の `COMFYUI_REF` で固定したコミットを取得し、`comfyui/uv.lock` と一致させています。
 
-この構成は画面・ワークフロー編集用です。CPU推論は遅いため、ローカルでモデルノードを実行せず、RunPod接続用workflow/clientは別途実装します。RunPod API呼び出し用custom node/clientと画像アップロード形式は未実装です。
+構成は次のとおりです。
+
+| パス | 内容 | git |
+|---|---|---|
+| `comfyui/pyproject.toml` | comfy-cliとComfyUIの依存を宣言 | 追跡 |
+| `comfyui/ComfyUI/` | upstreamのclone (comfy-cliが管理) | 無視 |
+| `comfyui/.venv/` | Python依存 | 無視 |
+
+ワークスペースは `comfy-cli set-default <repo>/comfyui/ComfyUI` で固定済みです。これをしないとcomfy-cliは既定の `~/Documents/comfy/ComfyUI` を見に行きます。
+
+**ComfyUIの依存は `uv add -r ComfyUI/requirements.txt` で `pyproject.toml` に宣言してあります。** `uv sync` は宣言されていないパッケージを削除するため、`uv pip install` で入れただけだとtorch等が消えます。ComfyUI本体を更新したとき (`git -C comfyui/ComfyUI pull`) は `uv add -r ComfyUI/requirements.txt` を再実行してください。
+
+M3 MaxではMPSが使われます (`Device: mps`)。ローカルGPU推論を避ける場合は `make run COMFY_ARGS=--cpu` を使ってください。
+
+RunPod API呼び出し用custom node/clientと画像アップロード形式は未実装です。Docker構成は廃止しましたが `git show aed7b64:comfyui/compose.yaml` で復元できます。
 
 ### ローカル後処理 (`scripts/`)
 
