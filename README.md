@@ -76,12 +76,12 @@ RunPod API keyをGitにcommitしないでください。`terraform.tfvars` とst
 ComfyUIはDockerを使わず、comfy-cliでリポジトリ内にインストールして起動します。**リポジトリ外にはファイルを置きません。**
 
 ```sh
-make setup   # Python・ComfyUI (固定コミット)・依存・後処理CLIをすべてリポジトリ内に用意
-make run     # http://127.0.0.1:8188 (Ctrl-C で停止。別端末からは make stop)
+make setup   # 依存関係とComfyUIをリポジトリ内に用意
+make launch  # comfy-cli で ComfyUI を起動 (http://127.0.0.1:8188、Ctrl-C で停止)
 make        # ターゲット一覧
 ```
 
-前提は `git`、`uv`、Python 3.14 (Homebrewの `python@3.14` など) がインストール済みであることです。uvのパッケージキャッシュは `.cache/uv` に置き、Pythonはダウンロードせず既存のものを使います。ComfyUIは `Makefile` の `COMFYUI_REF` で固定したコミットを取得し、`comfyui/uv.lock` と一致させています。
+前提は `git`、`uv`、Python 3.14 (Homebrewの `python@3.14` など) がインストール済みであることです。uvのパッケージキャッシュは `.cache/uv` に置き、Pythonはダウンロードせず既存のものを使います。ComfyUI本体はcomfy-cliが取得します (`comfy-cli install --skip-requirement --skip-torch-or-directml --skip-manager`)。依存関係は `comfyui/uv.lock` からuvが入れます。
 
 構成は次のとおりです。
 
@@ -95,7 +95,7 @@ make        # ターゲット一覧
 
 **ComfyUIの依存は `uv add -r ComfyUI/requirements.txt` で `pyproject.toml` に宣言してあります。** `uv sync` は宣言されていないパッケージを削除するため、`uv pip install` で入れただけだとtorch等が消えます。ComfyUI本体を更新したとき (`git -C comfyui/ComfyUI pull`) は `uv add -r ComfyUI/requirements.txt` を再実行してください。
 
-M3 MaxではMPSが使われます (`Device: mps`)。ローカルGPU推論を避ける場合は `make run COMFY_ARGS=--cpu` を使ってください。
+M3 MaxではMPSが使われます (`Device: mps`)。ローカルGPU推論を避ける場合は `comfyui/.venv/bin/comfy-cli launch -- --cpu` のようにComfyUIへ `--cpu` を渡してください。
 
 RunPod API呼び出し用custom node/clientと画像アップロード形式は未実装です。Docker構成は廃止しましたが `git show aed7b64:comfyui/compose.yaml` で復元できます。
 

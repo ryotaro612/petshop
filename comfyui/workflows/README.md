@@ -10,4 +10,4 @@ These are workflow goals, not yet executable graphs. Add a workflow JSON only af
 
 ## How ComfyUI sees this directory
 
-`make setup` (target `workflows`) makes `comfyui/ComfyUI/user/default/workflows` a symlink to this directory. Workflows saved from the ComfyUI UI therefore land here, in the repository, instead of inside the gitignored `comfyui/ComfyUI/` clone.
+ComfyUI saves workflows from its UI to `comfyui/ComfyUI/user/default/workflows/`, inside the gitignored clone. Copy a workflow here to keep it in the repository.

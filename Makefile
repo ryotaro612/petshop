@@ -1,4 +1,4 @@
-# petshop: set up the local toolchain from a fresh clone.
+# petshop: set up the repo so ComfyUI can be started with comfy-cli.
 # Requires git, uv and Python 3.14 (see comfyui/.python-version). Run from the repo root.
 
 .DEFAULT_GOAL := help
@@ -8,47 +8,33 @@ export UV_CACHE_DIR := $(CURDIR)/.cache/uv
 export UV_PYTHON_PREFERENCE := only-system
 unexport VIRTUAL_ENV
 
-COMFYUI_REPO := https://github.com/comfyanonymous/ComfyUI.git
-# Must match the dependencies locked in comfyui/uv.lock.
-COMFYUI_REF := 4c2b826d74a1827f5cc4a706608fc4653ed12972
-
-PORT ?= 8188
-COMFY_ARGS ?=
+# Dependencies come from comfyui/uv.lock, so comfy-cli only fetches ComfyUI itself.
+# VIRTUAL_ENV makes comfy-cli run ComfyUI with comfyui/.venv instead of creating its own venv.
+COMFY := VIRTUAL_ENV=$(CURDIR)/comfyui/.venv comfyui/.venv/bin/comfy-cli --skip-prompt --workspace $(CURDIR)/comfyui/ComfyUI
 
 ##@ Setup
 
-setup: comfyui deps workflows ## set up everything from a fresh clone
+setup: comfyui/.venv scripts/.venv comfyui/ComfyUI ## install the dependencies and ComfyUI
 
-comfyui: ## clone ComfyUI at COMFYUI_REF
-	test -d comfyui/ComfyUI || git clone -q --filter=blob:none $(COMFYUI_REPO) comfyui/ComfyUI
-	git -C comfyui/ComfyUI checkout -q $(COMFYUI_REF)
+comfyui/.venv scripts/.venv: %/.venv: %/uv.lock
+	uv sync --project $* --locked
+	touch $@
 
-deps: ## install the Python dependencies of comfyui/ and scripts/
-	uv sync --project comfyui --locked
-	uv sync --project scripts --locked
-
-workflows: ## save ComfyUI workflows to the tracked comfyui/workflows/
-	mkdir -p comfyui/ComfyUI/user/default
-	rmdir comfyui/ComfyUI/user/default/workflows 2>/dev/null || true
-	ln -sfn ../../../workflows comfyui/ComfyUI/user/default/workflows
+# Order-only: recreating the venv must not re-install ComfyUI.
+comfyui/ComfyUI: | comfyui/.venv
+	$(COMFY) install --m-series --skip-requirement --skip-torch-or-directml --skip-manager
 
 ##@ Run
 
-run: ## PORT=<port> COMFY_ARGS=<flags> start ComfyUI on localhost (e.g. COMFY_ARGS=--cpu)
-	cd comfyui/ComfyUI && ../.venv/bin/python main.py --listen 127.0.0.1 --port $(PORT) $(COMFY_ARGS)
-
-stop: ## PORT=<port> stop the ComfyUI listening on PORT
-	lsof -ti tcp:$(PORT) -sTCP:LISTEN | xargs kill
+launch: comfyui/.venv comfyui/ComfyUI ## start ComfyUI with comfy-cli
+	$(COMFY) launch
 
 ##@ Clean
 
-clean: ## remove the virtualenvs
-	rm -rf comfyui/.venv scripts/.venv
+clean: ## remove everything setup created (virtualenvs, comfyui/ComfyUI including its models and outputs, .cache)
+	rm -rf comfyui/.venv scripts/.venv comfyui/ComfyUI .cache
 
-distclean: clean ## also remove the ComfyUI clone and .cache/
-	rm -rf comfyui/ComfyUI .cache
-
-.PHONY: setup comfyui deps workflows run stop clean distclean
+.PHONY: setup launch clean
 
 ##@ Help
 .PHONY: help
